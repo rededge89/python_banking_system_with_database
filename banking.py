@@ -1,32 +1,21 @@
 import random
+import math
+import sqlite3
 
-all_cards = []
+conn = sqlite3.connect('card.s3db')
+cur = conn.cursor()
+CREATE_CARD_TABLE = '''CREATE TABLE IF NOT EXISTS card(
+                        id INTEGER,
+                        number text,
+                        pin text,
+                        balance INTEGER DEFAULT 0)'''
+
+INSERT_CARD = "INSERT INTO card (number, pin, balance) VALUES (?, ?, ?)"
 
 
 class CreditCard:
     def __init__(self):
-        # Luhn Validation
-        cc_number = "400000" + str(random.randint(100000000, 999999999))
-        cc_list = cc_number.split()
-        cc_list = [int(x) for x in cc_list]
-        doubled_second_digit_list = list()
-        digits = list(enumerate(cc_list, start=1))
-        for index, digit in digits:
-            if index % 2 == 0:
-                doubled_second_digit_list.append(digit * 2)
-            else:
-                doubled_second_digit_list.append(digit)
-        sum_of_digits = 0
-        for digit in digits:
-            if digit > 9:
-                digit -= 9
-                sum_of_digits += digit
-            else:
-                sum_of_digits += digit
-            remainder = sum_of_digits % 10
-            checksum = 10 - remainder
-
-        self.number = "400000" + str(cc_number) + str(checksum)
+        self.number = create_luhn_valid_card_number()
         self.pin = str(random.randint(1000, 9999))
         self.balance = 0
 
@@ -42,9 +31,8 @@ def menu1():
         print("You must only enter numbers")
     if selection == 1:
         card = CreditCard()
-        all_cards.append(card.number)
-        all_cards.append(card.pin)
-        all_cards.append(card.balance)
+        cur.execute("INSERT INTO card (number, pin, balance) VALUES (?, ?, ?)", (card.number, card.pin, 0))
+        conn.commit()
         print()
         print(f"Your card number: \n{card.number}\nYour card PIN:\n{card.pin}")
         print()
@@ -55,17 +43,17 @@ def menu1():
         card_number = str(input())
         print("Enter your PIN:")
         pin = str(input())
-        if card_number not in all_cards:
-            print("Wrong card number or PIN!")
-            menu1()
-        elif pin != all_cards[all_cards.index(card_number) + 1]:
-            print("Wrong card number or PIN!")
-            menu1()
-        else:
+        authentication = conn.cursor().execute('SELECT * FROM card WHERE number = ?', (str(card_number))).fetchone()
+        print(authentication)
+        if authentication != None:
             print()
             print("You have successfully logged in!")
             print()
-            menu2(all_cards.index(card_number))
+            menu2(authentication)
+        else:
+            print()
+            print("Wrong card number or PIN!")
+            print()
     elif selection == 0:
         quit()
 
@@ -80,7 +68,7 @@ def menu2(card_index):
     except ValueError:
         print("You must only enter numbers")
     if selection == 1:
-        print(all_cards[card_index + 2])
+        print("Balance: " + card_index[3])
         print()
         menu2(card_index)
     elif selection == 2:
@@ -92,5 +80,23 @@ def menu2(card_index):
         quit()
 
 
+def create_luhn_valid_card_number():
+    cc_number = "400000" + str(random.randint(100000000, 999999999))
+    cc_list = [number for number in cc_number]
+    cc_list = [int(x) for x in cc_list]
+    for i in range(len(cc_list)):
+        if i % 2 == 0:
+            cc_list[i] *= 2
+            if cc_list[i] > 9:
+                cc_list[i] -= 9
+        if sum(cc_list) % 10 == 0:
+            checksum = 0
+        else:
+            checksum = 10 - (sum(cc_list) % 10)
+    return str(cc_number) + str(checksum)
+
+
 # program start
+cur.execute(CREATE_CARD_TABLE)
+conn.commit()
 menu1()
