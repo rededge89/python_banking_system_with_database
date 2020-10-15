@@ -23,19 +23,90 @@ def select_card(card_num, pin):
         return cur.fetchone()
 
 
+def luhn_validation(card_number):
+    sum = 0
+    num_digits = len(card_number)
+    oddeven = num_digits & 1
+
+    for count in range(0, num_digits):
+        digit = int(card_number[count])
+
+        if not ((count & 1) ^ oddeven):
+            digit = digit * 2
+        if digit > 9:
+            digit = digit - 9
+
+        sum = sum + digit
+
+    return (sum % 10) == 0
+
+
+def deposit_funds(card_info, deposit_amount):
+    new_balance = int(card_info[3]) + int(deposit_amount)
+    with conn:
+        cur.execute('UPDATE card SET balance = ? WHERE number = ?', (new_balance, card_info[1]))
+
+
+def transfer_funds(card_info, receiver):
+    resume = 1
+    while resume != 0:
+        transfer_amount = input('Enter how much money you want to transfer:')
+        if int(transfer_amount) > card_info[3]:
+            print('Not enough money!\n')
+            return 1
+        else:
+            sender = int(card_info[3]) - int(transfer_amount)
+            with conn:
+                cur.execute('UPDATE card SET balance = ? WHERE number = ?', (sender, card_info[1]))
+            with conn:
+                cur.execute('SELECT * FROM card WHERE number = (?)', (receiver,))
+                account_to_receive = cur.fetchone()
+                cur.execute('UPDATE card SET balance = ? WHERE number = ?',
+                            (int(account_to_receive[3]) + int(transfer_amount), account_to_receive[1]))
+            return 1
+
+
+def delete_account(card_info):
+    with conn:
+        cur.execute("DELETE FROM card WHERE number = ?", (card_info[1],))
+
+
 def menu2(card_info):
-    while (selection := input("1. Balance\n2. Log out\n0. Exit\n")) != '0':
+    print_menu2 = "1. Balance\n2. Add income\n3. Do transfer\n4. Close account\n5. Log out\n0. Exit"
+    while (selection := input(print_menu2)) != '0':
         try:
             selection = int(selection)
-            if selection < 0 or selection > 2:
-                print("You must enter a number between 0 - 2\n")
+            if selection < 0 or selection > 5:
+                print("You must enter a number between 0 - 5\n")
         except ValueError:
             print("You must only enter numbers\n")
         if selection == 1:
             print("\nBalance: " + str(card_info[3]) + "\n")
         elif selection == 2:
+            income = input('Enter income:\n')
+            deposit_funds(card_info, income)
+            print("Income was added!\n")
+        elif selection == 3:
+            resume = 0
+            while resume != 1:
+                deposit_to = input('\nTransfer\nEnter card number:')
+                with conn:
+                    cur.execute('SELECT * FROM card WHERE number = (?)', (deposit_to,))
+                    transfer_to = cur.fetchone()
+                if not luhn_validation(deposit_to):
+                    print('Probably you made a mistake in the card number.  Please try again!')
+                elif transfer_to is None:
+                    print('Such a card does not exist.')
+                elif transfer_to == card_info[1]:
+                    print('Probably you made a mistake in the card number.  Please try again!')
+                else:
+                    resume = transfer_funds(card_info, deposit_to)
+        elif selection == 4:
+            delete_account(card_info)
+            print('\nThe account has been closed!\n')
+        elif selection == 5:
             print("\nYou have successfully logged out!\n")
-            return 2
+            return "continue"
     quit()
 
 
