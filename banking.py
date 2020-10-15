@@ -1,16 +1,8 @@
 import random
-import math
 import sqlite3
 
 conn = sqlite3.connect('card.s3db')
 cur = conn.cursor()
-CREATE_CARD_TABLE = '''CREATE TABLE IF NOT EXISTS card(
-                        id INTEGER,
-                        number text,
-                        pin text,
-                        balance INTEGER DEFAULT 0)'''
-
-INSERT_CARD = "INSERT INTO card (number, pin, balance) VALUES (?, ?, ?)"
 
 
 class CreditCard:
@@ -20,67 +12,35 @@ class CreditCard:
         self.balance = 0
 
 
-def menu1():
-    print("1. Create an account\n2. Log into account\n0. Exit")
-    selection = input()
-    try:
-        selection = int(selection)
-        if selection < 0 or selection > 2:
-            print("You must enter a number between 0 - 2")
-    except ValueError:
-        print("You must only enter numbers")
-    if selection == 1:
-        card = CreditCard()
-        cur.execute("INSERT INTO card (number, pin, balance) VALUES (?, ?, ?)", (card.number, card.pin, 0))
-        conn.commit()
-        print()
-        print(f"Your card number: \n{card.number}\nYour card PIN:\n{card.pin}")
-        print()
-        menu1()
-    elif selection == 2:
-        print()
-        print("Enter your card number:")
-        card_number = str(input())
-        print("Enter your PIN:")
-        pin = str(input())
-        authentication = conn.cursor().execute('SELECT * FROM card WHERE number = ?', (str(card_number))).fetchone()
-        print(authentication)
-        if authentication != None:
-            print()
-            print("You have successfully logged in!")
-            print()
-            menu2(authentication)
-        else:
-            print()
-            print("Wrong card number or PIN!")
-            print()
-    elif selection == 0:
-        quit()
+def insert_card(card_num, crd_pin):
+    with conn:
+        cur.execute('INSERT INTO card (number, pin, balance) VALUES (?, ?, ?)', (card_num, crd_pin, 0))
 
 
-def menu2(card_index):
-    print("1. Balance\n2. Log out\n0. Exit")
-    selection = input()
-    try:
-        selection = int(selection)
-        if selection < 0 or selection > 2:
-            print("You must enter a number between 0 - 2")
-    except ValueError:
-        print("You must only enter numbers")
-    if selection == 1:
-        print("Balance: " + card_index[3])
-        print()
-        menu2(card_index)
-    elif selection == 2:
-        print()
-        print("You have successfully logged out!")
-        print()
-        menu1()
-    elif selection == 0:
-        quit()
+def select_card(card_num, pin):
+    with conn:
+        cur.execute('SELECT * FROM card WHERE number = (?) AND pin = (?)', (card_num, pin))
+        return cur.fetchone()
+
+
+def menu2(card_info):
+    while (selection := input("1. Balance\n2. Log out\n0. Exit\n")) != '0':
+        try:
+            selection = int(selection)
+            if selection < 0 or selection > 2:
+                print("You must enter a number between 0 - 2\n")
+        except ValueError:
+            print("You must only enter numbers\n")
+        if selection == 1:
+            print("\nBalance: " + str(card_info[3]) + "\n")
+        elif selection == 2:
+            print("\nYou have successfully logged out!\n")
+            return 2
+    quit()
 
 
 def create_luhn_valid_card_number():
+    checksum = 0
     cc_number = "400000" + str(random.randint(100000000, 999999999))
     cc_list = [number for number in cc_number]
     cc_list = [int(x) for x in cc_list]
@@ -97,6 +57,32 @@ def create_luhn_valid_card_number():
 
 
 # program start
-cur.execute(CREATE_CARD_TABLE)
-conn.commit()
-menu1()
+with conn:
+    cur.execute('''CREATE TABLE IF NOT EXISTS card(
+                        id INTEGER,
+                        number text,
+                        pin text,
+                        balance INTEGER DEFAULT 0)''')
+menu1 = '1. Create an account\n2. Log into account\n0. Exit\n'
+while (selection := input(menu1)) != '0':
+    try:
+        selection = int(selection)
+        if selection < 0 or selection > 2:
+            print("You must enter a number between 0 - 2\n")
+    except ValueError:
+        print("You must only enter numbers\n")
+    if selection == 1:
+        card = CreditCard()
+        insert_card(card.number, card.pin)
+        print(f"\nYour card number: \n{card.number}\nYour card PIN:\n{card.pin}\n")
+    elif selection == 2:
+        print("\nEnter your card number:")
+        card_number = str(input())
+        print("Enter your PIN:")
+        pin = str(input())
+        verify_card = select_card(card_number, pin)
+        if verify_card is not None:
+            print("\nYou have successfully logged in!\n")
+            selection = menu2(verify_card)
+        else:
+            print("\nWrong card number or PIN!\n")
