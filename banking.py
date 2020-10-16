@@ -42,38 +42,20 @@ def luhn_validation(card_number):
 
 
 def deposit_funds(card_info, deposit_amount):
-    new_balance = int(card_info[3]) + int(deposit_amount)
+    balance = int(card_info[3]) + int(deposit_amount)
     with conn:
-        cur.execute('UPDATE card SET balance = ? WHERE number = ?', (new_balance, card_info[1]))
-
-
-def transfer_funds(card_info, receiver):
-    resume = 1
-    while resume != 0:
-        transfer_amount = input('Enter how much money you want to transfer:')
-        if int(transfer_amount) > card_info[3]:
-            print('Not enough money!\n')
-            return 1
-        else:
-            sender = int(card_info[3]) - int(transfer_amount)
-            with conn:
-                cur.execute('UPDATE card SET balance = ? WHERE number = ?', (sender, card_info[1]))
-            with conn:
-                cur.execute('SELECT * FROM card WHERE number = (?)', (receiver,))
-                account_to_receive = cur.fetchone()
-                cur.execute('UPDATE card SET balance = ? WHERE number = ?',
-                            (int(account_to_receive[3]) + int(transfer_amount), account_to_receive[1]))
-            return 1
+        cur.execute('UPDATE card SET balance = (?) WHERE number = (?)', (balance, card_info[1]))
 
 
 def delete_account(card_info):
     with conn:
-        cur.execute("DELETE FROM card WHERE number = ?", (card_info[1],))
+        cur.execute("DELETE FROM card WHERE number = (?)", (card_info[1],))
 
 
 def menu2(card_info):
-    print_menu2 = "1. Balance\n2. Add income\n3. Do transfer\n4. Close account\n5. Log out\n0. Exit"
+    print_menu2 = "1. Balance\n2. Add income\n3. Do transfer\n4. Close account\n5. Log out\n0. Exit\n"
     while (selection := input(print_menu2)) != '0':
+        card_info = select_card(card_info[1], card_info[2])
         try:
             selection = int(selection)
             if selection < 0 or selection > 5:
@@ -87,20 +69,24 @@ def menu2(card_info):
             deposit_funds(card_info, income)
             print("Income was added!\n")
         elif selection == 3:
-            resume = 0
-            while resume != 1:
-                deposit_to = input('\nTransfer\nEnter card number:')
-                with conn:
-                    cur.execute('SELECT * FROM card WHERE number = (?)', (deposit_to,))
-                    transfer_to = cur.fetchone()
-                if not luhn_validation(deposit_to):
-                    print('Probably you made a mistake in the card number.  Please try again!')
-                elif transfer_to is None:
-                    print('Such a card does not exist.')
-                elif transfer_to == card_info[1]:
-                    print('Probably you made a mistake in the card number.  Please try again!')
+            deposit_to = input('\nTransfer\nEnter card number:')
+            with conn:
+                cur.execute('SELECT * FROM card WHERE number = (?)', (deposit_to,))
+                transfer_to = cur.fetchone()
+            if not luhn_validation(deposit_to):
+                print('Probably you made a mistake in the card number.  Please try again!')
+            elif transfer_to is None:
+                print('Such a card does not exist.')
+            elif deposit_to == card_info[1]:
+                print('Probably you made a mistake in the card number.  Please try again!')
+            else:
+                transfer_amount = input('Enter how much money you want to transfer:\n')
+                if int(transfer_amount) > card_info[3]:
+                    print('not enough money!\n')
                 else:
-                    resume = transfer_funds(card_info, deposit_to)
+                    deposit_funds(transfer_to, int(transfer_amount))
+                    transfer_amount = int(transfer_amount) * -1
+                    deposit_funds(card_info, int(transfer_amount))
         elif selection == 4:
             delete_account(card_info)
             print('\nThe account has been closed!\n')
